@@ -112,7 +112,7 @@ if (!function_exists('accessSchema_client_pattern_to_regex')) {
     function accessSchema_client_pattern_to_regex($pattern) {
         $escaped = preg_quote($pattern, '#');
         $regex = str_replace(['\*\*', '\*'], ['.*', '[^/]+'], $escaped);
-        return "#^{$regex}$#";
+        return "#^{$regex}$#i";  // Add 'i' flag
     }
 }
 
