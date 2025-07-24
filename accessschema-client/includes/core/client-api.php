@@ -98,6 +98,54 @@ if (!function_exists('accessSchema_client_remote_post')) {
     }
 }
 
+if (!function_exists('accessSchema_client_remote_get')) {
+    /**
+     * Send a GET request to the AccessSchema API endpoint.
+     *
+     * @param string $client_id The unique plugin slug.
+     * @param string $endpoint  The API endpoint path (e.g., 'roles/all').
+     * @return array|WP_Error   Response array or error.
+     */
+    function accessSchema_client_remote_get($client_id, $endpoint) {
+        if (!is_string($client_id)) {
+            return new WP_Error('invalid_slug', 'Plugin slug must be a string');
+        }
+
+        $url_base = accessSchema_client_get_remote_url($client_id);
+        $key      = accessSchema_client_get_remote_key($client_id);
+
+        if (!$url_base || !$key) {
+            return new WP_Error('config_error', 'Remote URL or API key is not set');
+        }
+
+        $url = trailingslashit($url_base) . ltrim($endpoint, '/');
+
+        $response = wp_remote_get($url, [
+            'headers' => [
+                'x-api-key' => $key,
+            ],
+            'timeout' => 10,
+        ]);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $data   = json_decode(wp_remote_retrieve_body($response), true);
+
+        if (!is_array($data)) {
+            return new WP_Error('api_response_invalid', 'Invalid JSON from API');
+        }
+
+        if ($status !== 200) {
+            return new WP_Error('api_error', 'Remote API returned HTTP ' . $status);
+        }
+
+        return $data;
+    }
+}
+
 if (!function_exists('accessSchema_client_remote_get_roles_by_email')) {
     function accessSchema_client_remote_get_roles_by_email($email, $client_id) {
         // error_log("[OWBN] Begin role lookup for {$email} in slug {$client_id}");
@@ -195,6 +243,35 @@ if (!function_exists('accessSchema_client_remote_revoke_role')) {
         }
 
         return $result;
+    }
+}
+
+if (!function_exists('accessSchema_client_get_all_roles')) {
+    /**
+     * Get all roles from the AccessSchema server.
+     *
+     * @param string $client_id The unique plugin slug.
+     * @return array|WP_Error   Array with 'total', 'roles', and 'hierarchy' or error.
+     */
+    function accessSchema_client_get_all_roles($client_id) {
+        if (!is_string($client_id) || trim($client_id) === '') {
+            return new WP_Error('invalid_slug', 'Plugin slug must be a non-empty string');
+        }
+
+        // For remote mode, use GET request
+        if (accessSchema_is_remote_mode($client_id)) {
+            return accessSchema_client_remote_get($client_id, 'roles/all');
+        }
+
+        // For local mode, call the local API
+        $request = new WP_REST_Request('GET', '/access-schema/v1/roles/all');
+        $response = rest_do_request($request);
+        
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        return $response->get_data();
     }
 }
 
